@@ -1,6 +1,5 @@
 package supervisors
 
-import "fmt"
 import "time"
 
 const cWorkerStarted string = "Started"
@@ -9,6 +8,7 @@ const cWorkerExited string = "Exited"
 
 //type generalFunc func(...interface{}) interface{}
 type generalFunc func()
+type logFunc func(...interface{})
 
 type Worker struct {
 	name          string
@@ -21,10 +21,7 @@ type Supervisor struct {
 	workerList map[string]Worker
 	exited     bool
 	channel    chan string
-}
-
-func log(text interface{}) {
-	fmt.Println(text)
+	log        logFunc
 }
 
 func (s *Supervisor) monitor() {
@@ -32,7 +29,7 @@ func (s *Supervisor) monitor() {
 		for _, v := range s.workerList {
 			select {
 			case workerReport := <-v.reportingChan:
-				log(v.name + workerReport)
+				s.log(v.name, workerReport)
 				if workerReport == cWorkerPaniced || workerReport == cWorkerExited {
 					delete(s.workerList, v.name)
 				}
@@ -45,22 +42,22 @@ func (s *Supervisor) monitor() {
 		case command := <-s.channel:
 			if command == "exit" {
 				s.exited = true
-				log(s.name + " exit")
+				s.log(s.name + " exit")
 			}
 		default:
 		}
 		time.Sleep(time.Second * 1)
 	}
 
-	log(s.exited)
 }
 
-func New(supervisorName string) *Supervisor {
+func New(supervisorName string, fn logFunc) *Supervisor {
 	s := &Supervisor{
 		name:       supervisorName,
 		workerList: make(map[string]Worker),
 		exited:     false,
 		channel:    make(chan string),
+		log:        fn,
 	}
 
 	go func() {
